@@ -199,6 +199,28 @@ show_cards :-
            writeln("Cards: "),
            printlist(PlayerCards).
 
+left(_, _) :-
+           writeln("Not yet implemented").
+
+disprove_turn(X) :-
+               \+ current_player(X),
+               (suggestion(Y, _, _);suggestion(_, Y, _);suggestion(_, _, Y)),
+               player_card(X, Y),
+               write(X),
+               write(" has the "),
+               write(Y),
+               writeln(" card").
+
+disprove_turn(X) :-
+               left(X, Y),
+               \+ current_player(Y),
+               disprove_turn(Y).
+
+disprove_turn(X) :-
+               left(X, Y),
+               retractall(current_player(_)),
+               assert(current_player(Y)).
+
 printlist([]).
     
 printlist([X|List]) :-
@@ -206,10 +228,19 @@ printlist([X|List]) :-
         writeln(X),
         printlist(List).
 
+len([], LenResult):-
+    LenResult is 0.
+
+len([_|Y], LenResult):-
+    len(Y, L),
+    LenResult is L + 1.
+
 make_suggestion(S, W) :-
                          i_am_at(L),
                          place(S, L),
                          place(W, L),
+                         retractall(suggestion(_,_,_)),
+                         assert(suggestion(S, W, L)),
                          write("You suggested that the crime was committed by "),
                          write(S), 
                          write(", in the "),
@@ -221,6 +252,8 @@ make_suggestion(S, W, L) :-
                          i_am_at(L),
                          place(S, L),
                          place(W, L),
+                         retractall(suggestion(_,_,_)),
+                         assert(suggestion(S, W, L)),
                          write("You suggested that the crime was committed by "),
                          write(S), 
                          write(", in the "),
