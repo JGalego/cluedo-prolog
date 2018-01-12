@@ -1,12 +1,13 @@
 /* RULES */
 
-:- dynamic die_value/1, i_am/1, i_am_at/1, at/2, player_card/2.   /* Needed by SWI-Prolog. */
+:- dynamic die_value/1, i_am/1, i_am_at/1, at/2, player_card/2, left/2.   /* Needed by SWI-Prolog. */
 :- retractall(die_value(_)), 
    retractall(i_am(_)),
    retractall(i_am_at(_)),
    retractall(player_card(_,_)),
-   retractall(picked_card(_)),
+   retractall(dealt(_)),
    retractall(at(_,_)),
+   retractall(left(_)),
    retractall(murderer(_)), 
    retractall(murder_weapon(_)), 
    retractall(murder_location(_)).
@@ -54,12 +55,14 @@ card(X) :-
 who_am_i :-
            i_am(X),
            write("You are "),
-           writeln(X).
+           string_upper(X, Xu),
+           writeln(Xu).
 
 where_am_i :-
            i_am_at(X),
            write("You are in the "),
-           writeln(X).
+           string_upper(X, Xu),
+           writeln(Xu).
 
 where_am_i :-
            writeln("You are nowhere to be found!").
@@ -115,10 +118,10 @@ roll_die :-
 
 deal_cards :-
               findall(P, (suspect(P), findall(C, player_card(P, C), PlayerCards), \+ length(PlayerCards, 3)), Players),
-              findall(X, (card(X), \+ picked_card(X)), Cards),
+              findall(X, (card(X), \+ dealt(X)), Cards),
               random_member(Player, Players),
               random_member(Card, Cards),
-              assert(picked_card(Card)),
+              assert(dealt(Card)),
               assert(player_card(Player, Card)),
 	      deal_cards;
               true.
@@ -128,13 +131,13 @@ set_user :-
          findall(X, suspect(X), Suspects),
          random_member(SelectedSuspect, Suspects),
          assert(i_am(SelectedSuspect)),
-         writeln(""),
+         nl,
          who_am_i.
 
 set_envelope :-
-              findall(X, (suspect(X), \+ picked_card(X)), Suspects),
-              findall(Y, (weapon(Y), \+ picked_card(Y)), Weapons),
-              findall(Z, (room(Z), \+ picked_card(Z)), Rooms),
+              findall(X, (suspect(X), \+ dealt(X)), Suspects),
+              findall(Y, (weapon(Y), \+ dealt(Y)), Weapons),
+              findall(Z, (room(Z), \+ dealt(Z)), Rooms),
               writeln("Selecting murderer"),
               random_member(Murderer, Suspects),
               writeln("Selecting murder weapon"),
@@ -142,15 +145,16 @@ set_envelope :-
               writeln("Selecting murder location"),
               random_member(MurderLocation, Rooms),
               assert(murderer(Murderer)),
-              assert(picked_card(Murderer)),
+              assert(dealt(Murderer)),
               assert(murder_weapon(MurderWeapon)),
-              assert(picked_card(MurderWeapon)),
+              assert(dealt(MurderWeapon)),
               assert(murder_location(MurderLocation)),
-              assert(picked_card(MurderLocation)).
+              assert(dealt(MurderLocation)).
 
 place(X, Y) :-
          weapon(X),
          room(Y),
+         retractall(at(X, _)),
 	 assert(at(X, Y)),
          write("Placing the "),
          write(X),
@@ -160,6 +164,7 @@ place(X, Y) :-
 place(X, Y) :-
          suspect(X),
          room(Y),
+         retractall(at(X, _)),
 	 assert(at(X, Y)),
          write("Placing "),
          write(X),
@@ -169,20 +174,68 @@ place(X, Y) :-
 place(_, _) :-
          writeln("Invalid placement!").
 
+place_weapons :-
+              weapon(W),
+              \+ at(W, _),
+              findall(R, (room(R), findall(X, (weapon(X), at(X, R)), FoundWeapons), \+ length(FoundWeapons, 1)), Rooms),
+              random_member(SelectedRoom, Rooms),
+              place(W, SelectedRoom),
+              place_weapons;
+              writeln("Weapons in place"),
+              true.
+
+arrange_players :-
+                findall(P, suspect(P), Players),
+                random_permutation(Players, PlayerArrangement),
+                assert(arrangement(PlayerArrangement)),
+                nl,
+                writeln("Player Arrangement: "),
+                printlist(PlayerArrangement).
+
 show_cards :-
            i_am(P),
            findall(C, player_card(P, C), PlayerCards),
-           write("Cards: "),
-           writeln(PlayerCards).
+           nl,
+           writeln("Cards: "),
+           printlist(PlayerCards).
+
+printlist([]).
+    
+printlist([X|List]) :-
+        write("+ "),
+        writeln(X),
+        printlist(List).
+
+make_suggestion(S, W) :-
+                         i_am_at(L),
+                         place(S, L),
+                         place(W, L),
+                         write("You suggested that the crime was committed by "),
+                         write(S), 
+                         write(", in the "),
+                         write(L),
+                         write(", with a "),
+                         writeln(W).
+
+make_suggestion(S, W, L) :-
+                         i_am_at(L),
+                         place(S, L),
+                         place(W, L),
+                         write("You suggested that the crime was committed by "),
+                         write(S), 
+                         write(", in the "),
+                         write(L),
+                         write(", with a "),
+                         writeln(W).
 
 reset :-
-      retractall(die_value(_)), 
+      retractall(die_value(_)),
       retractall(i_am(_)),
       retractall(i_am_at(_)),
-      retractall(player(_,_,_)),
-      retractall(picked_card(_)),
+      retractall(dealt(_)),
       retractall(player_card(_,_)),
       retractall(at(_,_)),
+      retractall(left(_)),
       retractall(murderer(_)), 
       retractall(murder_weapon(_)), 
       retractall(murder_location(_)),
@@ -194,7 +247,7 @@ splash_screen :-
              writeln("  / /   / / / / / _ \\/ __  / __ \\ "),
              writeln(" / /___/ / /_/ /  __/ /_/ / /_/ / "),
              writeln(" \\____/_/\\__,_/\\___/\\__,_/\\____/  "),
-             writeln(""),
+             nl,
              writeln("Shuffling cards").
 
 start :-
@@ -202,6 +255,9 @@ start :-
       splash_screen,
       set_envelope,
       deal_cards,
+      place_weapons,
+      arrange_players,
       set_user,
-      show_cards.
+      show_cards,
+      nl.
 
