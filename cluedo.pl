@@ -1,15 +1,11 @@
 /* RULES */
 
-:- dynamic die_value/1, i_am/1, i_am_at/1, chosen/1, player/3, at/2.   /* Needed by SWI-Prolog. */
+:- dynamic die_value/1, i_am/1, i_am_at/1, at/2, player_card/2.   /* Needed by SWI-Prolog. */
 :- retractall(die_value(_)), 
    retractall(i_am(_)),
-   retractall(i_am_at(_)), 
-   retractall(chosen(_)), 
-   retractall(player(_,_,_)),
-   retractall(piece_player_pair(_,_)),
+   retractall(i_am_at(_)),
+   retractall(player_card(_,_)),
    retractall(picked_card(_)),
-   retractall(picked_piece(_)),
-   retractall(picked_player(_)),
    retractall(at(_,_)),
    retractall(murderer(_)), 
    retractall(murder_weapon(_)), 
@@ -36,7 +32,6 @@ room("Kitchen").
 room("Ballroom").
 room("Conservatory").
 room("Dining Room").
-room("Cellar"). /* where the envelope is */
 room("Billiard Room").
 room("Library").
 room("Lounge").
@@ -50,6 +45,11 @@ secret_passage(X,Y) :- secret_passage(Y,X).
 
 /* Dice */
 die_value(0).
+
+card(X) :-
+        suspect(X);
+        weapon(X);
+        room(X).
 
 who_am_i :-
            i_am(X),
@@ -113,21 +113,14 @@ roll_die :-
            retract(die_value(_)),
            assert(die_value(Value)).
 
-random_player :-
-              findall(X, (suspect(X), \+ picked_card(X)), Suspects),
-              findall(Y, (weapon(Y), \+ picked_card(Y)), Weapons),
-              findall(Z, (room(Z), \+ picked_card(Z)), Rooms),
-              random_member(SelectedSuspect, Suspects),
-              random_member(SelectedWeapon, Weapons),
-              random_member(SelectedRoom, Rooms),
-              assert(picked_card(SelectedSuspect)),
-              assert(picked_card(SelectedWeapon)),
-              assert(picked_card(SelectedRoom)),
-              assert(player(SelectedSuspect, SelectedWeapon, SelectedRoom)).
-
-random_player_configuration :-
-              random_player,
-              random_player_configuration;
+deal_cards :-
+              findall(P, (suspect(P), findall(C, player_card(P, C), PlayerCards), \+ length(PlayerCards, 3)), Players),
+              findall(X, (card(X), \+ picked_card(X)), Cards),
+              random_member(Player, Players),
+              random_member(Card, Cards),
+              assert(picked_card(Card)),
+              assert(player_card(Player, Card)),
+	      deal_cards;
               true.
 
 set_user :-
@@ -135,6 +128,7 @@ set_user :-
          findall(X, suspect(X), Suspects),
          random_member(SelectedSuspect, Suspects),
          assert(i_am(SelectedSuspect)),
+         writeln(""),
          who_am_i.
 
 set_envelope :-
@@ -148,8 +142,11 @@ set_envelope :-
               writeln("Selecting murder location"),
               random_member(MurderLocation, Rooms),
               assert(murderer(Murderer)),
+              assert(picked_card(Murderer)),
               assert(murder_weapon(MurderWeapon)),
-              assert(murder_location(MurderLocation)).
+              assert(picked_card(MurderWeapon)),
+              assert(murder_location(MurderLocation)),
+              assert(picked_card(MurderLocation)).
 
 place(X, Y) :-
          weapon(X),
@@ -174,38 +171,17 @@ place(_, _) :-
 
 show_cards :-
            i_am(P),
-           piece_player_pair(P, S),
-           player(S, W, L),
-           writeln(""),
-           write("Suspect: "),
-           writeln(S),
-           write("Weapon: "),
-           writeln(W),
-           write("Location: "),
-           writeln(L),
-           writeln(""). 
-
-generate_piece_configurations :-
-                              findall(X, (suspect(X), \+ picked_piece(X)), Pieces),
-                              findall(X, (player(X,_,_), \+ picked_player(X)), Players),
-                              random_member(Piece, Pieces),
-                              random_member(Player, Players),
-                              assert(picked_piece(Piece)),
-                              assert(picked_player(Player)),
-                              assert(piece_player_pair(Piece, Player)),
-                              generate_piece_configurations;
-                              true. 
+           findall(C, player_card(P, C), PlayerCards),
+           write("Cards: "),
+           writeln(PlayerCards).
 
 reset :-
       retractall(die_value(_)), 
       retractall(i_am(_)),
-      retractall(i_am_at(_)), 
-      retractall(chosen(_)), 
+      retractall(i_am_at(_)),
       retractall(player(_,_,_)),
-      retractall(piece_player_pair(_,_)),
       retractall(picked_card(_)),
-      retractall(picked_piece(_)),
-      retractall(picked_player(_)),
+      retractall(player_card(_,_)),
       retractall(at(_,_)),
       retractall(murderer(_)), 
       retractall(murder_weapon(_)), 
@@ -225,8 +201,7 @@ start :-
       reset,
       splash_screen,
       set_envelope,
-      random_player_configuration,
-      generate_piece_configurations,
+      deal_cards,
       set_user,
       show_cards.
 
