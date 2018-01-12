@@ -8,8 +8,6 @@ A simple implementation of the game <a href="https://en.wikipedia.org/wiki/Clued
 
 Tested with <a href="http://www.swi-prolog.org">SWI-Prolog</a>.
 
-<img src="swipl.png" height="40">
-
 ### Start the Game
 
 	?- [cluedo].
