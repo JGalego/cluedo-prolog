@@ -8,5 +8,15 @@ A simple implementation of the game <a href="https://en.wikipedia.org/wiki/Clued
 
 Tested with <a href="http://www.swi-prolog.org">SWI-Prolog</a>.
 
+### Start the Game
+
     ?- [cluedo].
     ?- start.
+
+### Make a Suggestion
+
+    ?- make_suggestion("Colonel Mustard", "Knife", "Kitchen").
+
+### Open the Envelope
+
+    ?- open_envelope.
