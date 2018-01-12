@@ -2,11 +2,13 @@
 
 A simple implementation of the game <a href="https://en.wikipedia.org/wiki/Cluedo">Cluedo</a> in Prolog.
 
-<img src="cluedo.gif" height="350">
+<img src="cluedo.gif" height="300">
 
 ## Instructions
 
 Tested with <a href="http://www.swi-prolog.org">SWI-Prolog</a>.
+
+<img src="swipl.png" height="40">
 
 ### Start the Game
 
@@ -109,5 +111,5 @@ Tested with <a href="http://www.swi-prolog.org">SWI-Prolog</a>.
 
 ### Open the Envelope
 
-    	?- open_envelope.
+	?- open_envelope.
 	The crime was committed by REVEREND MR. GREEN, in the STUDY, with a CANDLESTICK
