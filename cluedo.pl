@@ -1,13 +1,15 @@
-/* RULES */
+/* CLUEDO */
 
-:- dynamic die_value/1, i_am/1, i_am_at/1, at/2, player_card/2, left/2.   /* Needed by SWI-Prolog. */
+:- dynamic die_value/1, i_am/1, i_am_at/1, at/2, player_card/2, left/2, current_player/1.   /* Needed by SWI-Prolog. */
 :- retractall(die_value(_)), 
+   retractall(arrangement(_)),
    retractall(i_am(_)),
    retractall(i_am_at(_)),
    retractall(player_card(_,_)),
    retractall(dealt(_)),
    retractall(at(_,_)),
-   retractall(left(_)),
+   retractall(to_the_left(_)),
+   retractall(to_the_right(_)),
    retractall(murderer(_)), 
    retractall(murder_weapon(_)), 
    retractall(murder_location(_)).
@@ -38,6 +40,7 @@ room("Library").
 room("Lounge").
 room("Hall").
 room("Study").
+room("Outside"). /* this one is special */
 
 /* Secret Passages */
 secret_passage("Kitchen", "Study").
@@ -67,6 +70,23 @@ where_am_i :-
 where_am_i :-
            writeln("You are nowhere to be found!").
 
+where_is(S) :-
+                 suspect(S),
+				 at(S, L),
+				 room(L),
+				 write(S),
+				 write(" is in the "),
+				 write(L).
+
+where_is(W) :-
+                 weapon(W),
+				 at(W, L),
+				 room(L),
+				 write("The "),
+				 write(W),
+				 write(" is in the "),
+				 write(L).
+		   
 goto(X) :-
          room(X),
          i_am_at(X),
@@ -134,6 +154,20 @@ set_user :-
          nl,
          who_am_i.
 
+open_envelope :-
+                      murderer(M),
+					  string_upper(M, Mu),
+					  murder_weapon(W),
+					  string_upper(W, Wu),
+					  murder_location(L),
+					  string_upper(L, Lu),
+                      write("The crime was committed by "),
+                      write(Mu), 
+                      write(", in the "),
+                      write(Lu),
+                      write(", with a "),
+                      writeln(Wu).
+
 set_envelope :-
               findall(X, (suspect(X), \+ dealt(X)), Suspects),
               findall(Y, (weapon(Y), \+ dealt(Y)), Weapons),
@@ -155,7 +189,7 @@ place(X, Y) :-
          weapon(X),
          room(Y),
          retractall(at(X, _)),
-	 assert(at(X, Y)),
+	     assert(at(X, Y)),
          write("Placing the "),
          write(X),
          write(" inside the "),
@@ -165,10 +199,10 @@ place(X, Y) :-
          suspect(X),
          room(Y),
          retractall(at(X, _)),
-	 assert(at(X, Y)),
-         write("Placing "),
+	     assert(at(X, Y)),
+         write("Moving "),
          write(X),
-         write(" inside the "),
+         write(" to the "),
          writeln(Y).
 
 place(_, _) :-
@@ -192,15 +226,36 @@ arrange_players :-
                 writeln("Player Arrangement: "),
                 printlist(PlayerArrangement).
 
+show_cards(S) :-
+           findall(C, player_card(S, C), PlayerCards),
+           nl,
+           write("Cards("),
+		   write(S),
+		   writeln(": "),
+           printlist(PlayerCards).	
+			
 show_cards :-
            i_am(P),
            findall(C, player_card(P, C), PlayerCards),
            nl,
            writeln("Cards: "),
            printlist(PlayerCards).
+		   
+to_the_left(X, Y) :-
+           suspect(X),
+		   suspect(Y),
+		   X \= Y,
+		   arrangement(Z),
+		   findall(S, suspect(S), Suspects),
+		   length(Suspects, Size),
+		   nth0(N, Z, Elem1),
+		   NP2 is mod(N+1, Size),
+		   nth0(NP2, Z, Elem2),
+		   X == Elem1,
+		   Y == Elem2.
 
-left(_, _) :-
-           writeln("Not yet implemented").
+to_the_right(X, Y) :-
+           to_the_left(Y, X).
 
 disprove_turn(X) :-
                \+ current_player(X),
@@ -212,14 +267,23 @@ disprove_turn(X) :-
                writeln(" card").
 
 disprove_turn(X) :-
-               left(X, Y),
-               \+ current_player(Y),
+               to_the_left(X, Y),
                disprove_turn(Y).
 
 disprove_turn(X) :-
-               left(X, Y),
+               to_the_left(X, Y),
                retractall(current_player(_)),
                assert(current_player(Y)).
+
+random_turn :-
+                  current_player(X),
+                  \+ i_am(X),
+				  roll_die,
+				  die_value(D),
+				  (D > 3, findall(R, (room(R)), AvailableRooms)); 
+				  (to_the_left(Y, X), retractall(current_player(_)), assert(current_player(Y)), random_turn);
+				  writeln("not implemented"),
+				  true.
 
 printlist([]).
     
@@ -263,12 +327,14 @@ make_suggestion(S, W, L) :-
 
 reset :-
       retractall(die_value(_)),
+	  retractall(arrangement(_)),
       retractall(i_am(_)),
       retractall(i_am_at(_)),
       retractall(dealt(_)),
       retractall(player_card(_,_)),
       retractall(at(_,_)),
-      retractall(left(_)),
+      retractall(to_the_left(_)),
+	  retractall(to_the_right(_)),
       retractall(murderer(_)), 
       retractall(murder_weapon(_)), 
       retractall(murder_location(_)),
@@ -293,4 +359,3 @@ start :-
       set_user,
       show_cards,
       nl.
-
