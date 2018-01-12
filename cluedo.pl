@@ -10,15 +10,15 @@
 %
 
 :- dynamic die_value/1, i_am/1, i_am_at/1, at/2, player_card/2, left/2, current_player/1.   /* Needed by SWI-Prolog. */
-:- retractall(die_value(_)), 
+:- retractall(current_player(_)),
+   retractall(die_value(_)), 
    retractall(arrangement(_)),
    retractall(i_am(_)),
    retractall(i_am_at(_)),
    retractall(player_card(_,_)),
    retractall(dealt(_)),
    retractall(at(_,_)),
-   retractall(to_the_left(_)),
-   retractall(to_the_right(_)),
+   retractall(is_before(_)),
    retractall(murderer(_)), 
    retractall(murder_weapon(_)), 
    retractall(murder_location(_)).
@@ -49,27 +49,26 @@ room("Library").
 room("Lounge").
 room("Hall").
 room("Study").
-room("Outside"). /* this one is special */
 
 /* Secret Passages */
 secret_passage("Kitchen", "Study").
 secret_passage("Conversatory", "Lounge").
 secret_passage(X,Y) :- secret_passage(Y,X).
 
-/* Dice */
-die_value(0).
-
+% check if its a card
 card(C) :-
     suspect(C);
     weapon(C);
     room(C).
 
+% who am I?
 who_am_i :-
     i_am(X),
     write("You are "),
     string_upper(X, Xu),
     writeln(Xu).
 
+% where am I?
 where_am_i :-
     i_am_at(X),
     write("You are in the "),
@@ -79,6 +78,7 @@ where_am_i :-
 where_am_i :-
     writeln("You are nowhere to be found!").
 
+% where is suspect <S>?
 where_is(S) :-
     suspect(S),
     at(S, L),
@@ -87,6 +87,7 @@ where_is(S) :-
     write(" is in the "),
     write(L).
 
+% where is the weapon <W>?
 where_is(W) :-
     weapon(W),
     at(W, L),
@@ -95,7 +96,8 @@ where_is(W) :-
     write(W),
     write(" is in the "),
     write(L).
-		   
+
+% go to room <R>		   
 goto(R) :-
     room(R),
     i_am_at(R),
@@ -121,6 +123,7 @@ goto(R) :-
     \+ room(R),
     writeln("Invalid room!").
 
+% enter the secret passage (if there is one)
 enter_secret_passage :-
     i_am_at(R1),
     secret_passage(R1, R2),
@@ -130,6 +133,7 @@ enter_secret_passage :-
 enter_secret_passage :-
     writeln("This room has no secret passage").
 
+% look around the room and list all objects and suspects
 look_around :-
     i_am_at(R),
     findall(O, at(O, R), Found),
@@ -138,13 +142,15 @@ look_around :-
     writeln(": "),
     printlist(Found).
 
+% roll the die
 roll_die :-
     Value is random(5)+1,
     write("The die landed on "),
     writeln(Value),
-    retract(die_value(_)),
+    retractall(die_value(_)),
     assert(die_value(Value)).
 
+% deal all the cards
 deal_cards :-
     findall(P, (suspect(P), findall(C, player_card(P, C), PlayerCards), \+ length(PlayerCards, 3)), Players),
     findall(X, (card(X), \+ dealt(X)), Cards),
@@ -155,14 +161,17 @@ deal_cards :-
     deal_cards;
     true.
 
+% select a piece for the user
 set_user :-
     \+ i_am(_),
     findall(S, suspect(S), Suspects),
     random_member(SelectedSuspect, Suspects),
     assert(i_am(SelectedSuspect)),
+    assert(current_player(SelectedSuspect)),
     nl,
     who_am_i.
 
+% open the envelope and reveal the murderer
 open_envelope :-
     murderer(M),
     string_upper(M, Mu),
@@ -177,6 +186,7 @@ open_envelope :-
     write(", with a "),
     writeln(Wu).
 
+% select a murderer, a murder weapon and a murder location at random
 set_envelope :-
     findall(S, (suspect(S), \+ dealt(S)), Suspects),
     findall(W, (weapon(W), \+ dealt(W)), Weapons),
@@ -217,8 +227,11 @@ place(S, R) :-
     writeln(R).
 
 % invalid placement
-place(_, _) :-
-    writeln("Invalid placement!").
+place(X, Y) :-
+    writeln("Invalid placement!"),
+    write(X),
+    write(" in "),
+    writeln(Y).
 
 % randomly place all weapons
 place_weapons :-
@@ -257,24 +270,6 @@ show_cards :-
     writeln("Cards: "),
     printlist(PlayerCards).
 
-% check the player to the left		   
-to_the_left(X, Y) :-
-    suspect(X),
-    suspect(Y),
-    X \= Y,
-    arrangement(Z),
-    findall(S, suspect(S), Suspects),
-    length(Suspects, Size),
-    nth0(N, Z, Elem1),
-    NP2 is mod(N+1, Size),
-    nth0(NP2, Z, Elem2),
-    X == Elem1,
-    Y == Elem2.
-
-% check the player to the right
-to_the_right(X, Y) :-
-    to_the_left(Y, X).
-
 % start disprove turn
 disprove_turn(X) :-
     \+ current_player(X),
@@ -286,33 +281,77 @@ disprove_turn(X) :-
     writeln(" card").
 
 disprove_turn(X) :-
-    to_the_left(X, Y),
+    is_before(X, Y),
     disprove_turn(Y).
 
-disprove_turn(X) :-
-    to_the_left(X, Y),
+% next player
+next_player :-
+    is_next(X),
     retractall(current_player(_)),
-    assert(current_player(Y)).
+    assert(current_player(X)).
+
+% is next player?
+is_next(X) :-
+    current_player(Y),
+    is_before(Y, X).
+	   
+% is before?
+is_before(X, Y) :-
+    suspect(X),
+    suspect(Y),
+    X \= Y,
+    arrangement(Z),
+    findall(S, suspect(S), Suspects),
+    length(Suspects, Size),
+    nth0(N, Z, Elem1),
+    NP is mod(N+1, Size),
+    nth0(NP, Z, Elem2),
+    X == Elem1,
+    Y == Elem2.
 
 % start random turn
 random_turn :-
     current_player(X),
     \+ i_am(X),
+    nl,
+    write("+ "),
+    write(X),
+    writeln("'s turn"),
+    nl,
     roll_die,
-    die_value(D),
-    (D > 3, 
-    findall(R, (room(R)), AvailableRooms), 
+    die_value(D1),
+    ((D1 > 3, 
+    findall(R, room(R), AvailableRooms), 
     random_member(SelectedRoom, AvailableRooms), 
-    move(X, SelectedRoom)); 
-    (to_the_left(Y, X), retractall(current_player(_)), assert(current_player(Y)), random_turn);
-    writeln("not implemented"),
+    place(X, SelectedRoom),
+    roll_die,
+    die_value(D2),
+    ((D2 > 3,
+    findall(S, (suspect(S), \+ at(S, SelectedRoom)), MurderSuspects),
+    random_member(SelectedMurderer, MurderSuspects),
+    findall(W, weapon(W), MurderWeapons),
+    random_member(SelectedWeapon, MurderWeapons),
+    make_suggestion(SelectedMurderer, SelectedWeapon),
+    is_next(NextPlayer),
+    disprove_turn(NextPlayer),
+    random_turn);
+    (D2 =< 3, 
+    writeln("Skipping suggestion"),
+    next_player,
+    random_turn)));
+    (D1 =< 3,
+    writeln("The player is not allowed to move"),
+    next_player,
+    random_turn));
+    nl,
+    writeln("Random turn ended - Make your move"),
     true.
 
 % print list
 printlist([]).
     
 printlist([X|List]) :-
-    write("+ "),
+    write("    + "),
     writeln(X),
     printlist(List).
 
@@ -354,6 +393,7 @@ make_suggestion(S, W, L) :-
 
 % reset all facts and clear screen
 reset :-
+    retractall(current_player(_)),
     retractall(die_value(_)),
     retractall(arrangement(_)),
     retractall(i_am(_)),
@@ -361,8 +401,7 @@ reset :-
     retractall(dealt(_)),
     retractall(player_card(_,_)),
     retractall(at(_,_)),
-    retractall(to_the_left(_)),
-    retractall(to_the_right(_)),
+    retractall(is_before(_)),
     retractall(murderer(_)), 
     retractall(murder_weapon(_)), 
     retractall(murder_location(_)),
