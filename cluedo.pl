@@ -280,7 +280,10 @@ random_turn :-
                   \+ i_am(X),
 				  roll_die,
 				  die_value(D),
-				  (D > 3, findall(R, (room(R)), AvailableRooms)); 
+				  (D > 3, 
+				  findall(R, (room(R)), AvailableRooms), 
+				  random_member(SelectedRoom, AvailableRooms), 
+				  move(X, SelectedRoom)); 
 				  (to_the_left(Y, X), retractall(current_player(_)), assert(current_player(Y)), random_turn);
 				  writeln("not implemented"),
 				  true.
