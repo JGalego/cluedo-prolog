@@ -9,7 +9,7 @@
 % @author João Galego <jgalego1990@gmail.com>
 %
 
-:- dynamic die_value/1, i_am/1, i_am_at/1, at/2, player_card/2, left/2, current_player/1.   /* Needed by SWI-Prolog. */
+:- dynamic die_value/1, i_am/1, i_am_at/1, at/2, player_card/2, left/2, current_player/1, past_suggestion/3.   /* Needed by SWI-Prolog. */
 :- retractall(current_player(_)),
    retractall(die_value(_)), 
    retractall(arrangement(_)),
@@ -21,15 +21,16 @@
    retractall(is_before(_)),
    retractall(murderer(_)), 
    retractall(murder_weapon(_)), 
-   retractall(murder_location(_)).
+   retractall(murder_location(_)),
+   retractall(past_suggestion(_,_,_)).
 
 /* Suspects */
-suspect("Miss Scarlett"). 	% red piece
-suspect("Professor Plum").	% purple piece
-suspect("Mrs. Peacock").	% blue piece
+suspect("Miss Scarlett"). 	    % red piece
+suspect("Professor Plum").	    % purple piece
+suspect("Mrs. Peacock").	    % blue piece
 suspect("Reverend Mr. Green").	% green piece
-suspect("Colonel Mustard").	% yellow piece
-suspect("Mrs. White").		% white piece
+suspect("Colonel Mustard").	    % yellow piece
+suspect("Mrs. White").		    % white piece
 
 /* Weapons */
 weapon("Candlestick").
@@ -53,7 +54,9 @@ room("Study").
 /* Secret Passages */
 secret_passage("Kitchen", "Study").
 secret_passage("Conversatory", "Lounge").
-secret_passage(X,Y) :- secret_passage(Y,X).
+secret_passage(X,Y) :- 
+    % secret passages go both ways
+    secret_passage(Y,X).
 
 % check if its a card
 card(C) :-
@@ -76,64 +79,61 @@ where_am_i :-
     writeln(Xu).
 
 where_am_i :-
-    writeln("You are nowhere to be found!").
+    writeln("You are nowhere to be found!"),
+    writeln("Use 'goto' to enter a room").
 
-% where is suspect <S>?
-where_is(S) :-
-    suspect(S),
-    at(S, L),
-    room(L),
-    write(S),
+% where is <X>?
+where_is(X) :-
+    (suspect(X);
+    weapon(X)),
+    at(X, R),
+    room(R),
+    string_upper(X, Xu),
+    string_upper(R, Ru),
+    write(Xu),
     write(" is in the "),
-    write(L).
-
-% where is the weapon <W>?
-where_is(W) :-
-    weapon(W),
-    at(W, L),
-    room(L),
-    write("The "),
-    write(W),
-    write(" is in the "),
-    write(L).
+    write(Ru).
 
 % go to room <R>		   
 goto(R) :-
     room(R),
     i_am_at(R),
     write("You are already inside the "),
-    writeln(R).
+    string_upper(R, Ru),
+    writeln(Ru).
 
 goto(R) :-
     room(R),
     \+ i_am_at(R),
-    retract(i_am_at(_)),
+    (retract(i_am_at(_)); true),
     assert(i_am_at(R)),
     write("You are now inside the "),
-    writeln(R).
-
-goto(R) :-
-    room(R),
-    \+ i_am_at(R),
-    assert(i_am_at(R)),
-    write("You are now inside the "),
-    writeln(R).
+    string_upper(R, Ru),
+    writeln(Ru).
 
 goto(R) :-
     \+ room(R),
-    writeln("Invalid room!").
+    writeln("Invalid room!"),
+    findall(X, room(X), Rooms),
+    writeln("List of Rooms:"),
+    printlist(Rooms).
+
+% is there a secret passage in the current room?
+search_secret_passage :-
+    i_am_at(R),
+    (secret_passage(R, _),
+    writeln("Found a secret passage");
+    writeln("This room has no secret passage")).
 
 % enter the secret passage (if there is one)
 enter_secret_passage :-
     i_am_at(R1),
-    secret_passage(R1, R2),
+    ((secret_passage(R1, R2),
     writeln("Entering the secret passage"),
-    goto(R2).
+    goto(R2));
+    writeln("This room has no secret passage")).
 
-enter_secret_passage :-
-    writeln("This room has no secret passage").
-
-% look around the room and list all objects and suspects
+% list all objects and suspects in the current room
 look_around :-
     i_am_at(R),
     findall(O, at(O, R), Found),
@@ -150,7 +150,7 @@ roll_die :-
     retractall(die_value(_)),
     assert(die_value(Value)).
 
-% deal all the cards
+% deal all the cards among the players
 deal_cards :-
     findall(P, (suspect(P), findall(C, player_card(P, C), PlayerCards), \+ length(PlayerCards, 3)), Players),
     findall(X, (card(X), \+ dealt(X)), Cards),
@@ -311,35 +311,31 @@ is_before(X, Y) :-
 
 % start random turn
 random_turn :-
-    current_player(X),
-    \+ i_am(X),
+    current_player(CurrentPlayer),
+    \+ i_am(CurrentPlayer),
     nl,
     write("+ "),
-    write(X),
+    write(CurrentPlayer),
     writeln("'s turn"),
     nl,
     roll_die,
-    die_value(D1),
-    ((D1 > 3, 
+    die_value(DieRoll),
+    % if the die rolls higher than 3
+    % the player moves to a random room 
+    % and makes a suggestion
+    ((DieRoll > 3, 
     findall(R, room(R), AvailableRooms), 
     random_member(SelectedRoom, AvailableRooms), 
-    place(X, SelectedRoom),
-    roll_die,
-    die_value(D2),
-    ((D2 > 3,
+    place(CurrentPlayer, SelectedRoom),
     findall(S, (suspect(S), \+ at(S, SelectedRoom)), MurderSuspects),
     random_member(SelectedMurderer, MurderSuspects),
     findall(W, weapon(W), MurderWeapons),
     random_member(SelectedWeapon, MurderWeapons),
-    make_suggestion(SelectedMurderer, SelectedWeapon),
-    is_next(NextPlayer),
-    disprove_turn(NextPlayer),
-    random_turn);
-    (D2 =< 3, 
-    writeln("Skipping suggestion"),
+    \+ past_suggestion(SelectedMurderer, SelectedWeapon, SelectedRoom),
+    make_suggestion(SelectedMurderer, SelectedWeapon, SelectedRoom),
     next_player,
-    random_turn)));
-    (D1 =< 3,
+    random_turn);
+    (DieRoll =< 3,
     writeln("The player is not allowed to move"),
     next_player,
     random_turn));
@@ -364,32 +360,29 @@ len([_|Y], LenResult):-
     LenResult is L + 1.
 
 % make a suggestion
-% i.e.  The crime was commited by <S>, in the <R>, with a <W>
-make_suggestion(S, W) :-
-    i_am_at(L),
-    place(S, L),
-    place(W, L),
+% i.e.  The crime was commited by <Suspect> with a <Weapon> in the <Room>
+make_suggestion(Suspect, Weapon, Room) :-
+    current_player(CurrentPlayer),
+    at(CurrentPlayer, Room),
+    place(Suspect, Room),
+    place(Weapon, Room),
     retractall(suggestion(_,_,_)),
-    assert(suggestion(S, W, L)),
-    write("You suggested that the crime was committed by "),
-    write(S), 
-    write(", in the "),
-    write(L),
-    write(", with a "),
-    writeln(W).
+    assert(suggestion(Suspect, Weapon, Room)),
+    assert(past_suggestion(Suspect, Weapon, Room)),
+    write("Player suggested that the crime was committed by "),
+    write(Suspect), 
+    write(" with a "),
+    write(Weapon),
+    write(" in the "),
+    writeln(Room),
+    is_next(NextPlayer),
+    writeln("Starting disprove turn"),
+    disprove_turn(NextPlayer).
 
-make_suggestion(S, W, L) :-
-    i_am_at(L),
-    place(S, L),
-    place(W, L),
-    retractall(suggestion(_,_,_)),
-    assert(suggestion(S, W, L)),
-    write("You suggested that the crime was committed by "),
-    write(S), 
-    write(", in the "),
-    write(L),
-    write(", with a "),
-    writeln(W).
+list_past_suggestions :-
+    writeln("Past Suggestions:"),
+    findall([Suspect, Weapon, Room], past_suggestion(Suspect, Weapon, Room), PastSuggestions),
+    printlist(PastSuggestions).
 
 % reset all facts and clear screen
 reset :-
@@ -405,6 +398,7 @@ reset :-
     retractall(murderer(_)), 
     retractall(murder_weapon(_)), 
     retractall(murder_location(_)),
+    retractall(past_suggestion(_,_,_)),
     write('\e[H\e[2J').
 
 % press any key to continue
